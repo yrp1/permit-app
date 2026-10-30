@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visitor permit</title>
+<style>
+:root{--bg:#e9eef3;--ink:#14212b;--muted:#5b6b78;--card:#fff;--line:#c9d3dc;--blue:#0b4f9c;--ok:#1a7f4b;--bad:#b3261e}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:30rem;margin:0 auto;padding:1.25rem 1rem 3rem}
+h1{font-size:1.4rem;margin:.5rem 0 1rem}
+.plate{background:#fff;border:3px solid #111;border-radius:10px;box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px #0b4f9c;text-align:center;padding:1.4rem 1rem 1.1rem;margin-bottom:1.25rem}
+.plate small{display:block;color:var(--blue);font-weight:700;letter-spacing:.04em;font-size:.8rem}
+.plate b{display:block;font:800 clamp(2.2rem,12vw,3.4rem)/1.1 "Arial Narrow","Helvetica Neue",Arial,sans-serif;letter-spacing:.12em}
+.plate i{display:block;font-style:normal;color:var(--muted);font-size:.8rem;margin-top:.25rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1rem;margin-bottom:1rem}
+label{display:block;font-weight:600;margin-bottom:.3rem}
+select,input{width:100%;font:inherit;padding:.7rem .75rem;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);min-height:2.9rem}
+:focus-visible{outline:3px solid #6aa7ee;outline-offset:2px}
+.row{display:flex;gap:.5rem}
+.row>*{flex:1}.row>button{flex:0 0 auto}
+button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:.7rem 1rem;min-height:2.9rem;cursor:pointer;background:#dfe7ee;color:var(--ink)}
+button.go{width:100%;background:var(--blue);color:#fff;font-size:1.1rem;margin-top:1rem}
+button:disabled{opacity:.5;cursor:not-allowed}
+.gap{margin-top:.9rem}
+details summary{cursor:pointer;font-weight:600}
+details .gap:first-of-type{margin-top:.9rem}
+.hint{color:var(--muted);font-size:.85rem;margin:.35rem 0 0}
+#status{margin-top:1rem;font-weight:600;min-height:1.5rem}
+#status.ok{color:var(--ok)}#status.bad{color:var(--bad)}
+#status a{color:inherit}
+</style>
+</head>
+<body>
+<main>
+  <h1>Visitor parking permit</h1>
+
+  <div class="plate" aria-live="polite">
+    <small>ONTARIO</small>
+    <b id="plateShow">—</b>
+    <i id="daysShow"></i>
+  </div>
+
+  <div class="card">
+    <label for="plateSel">Plate</label>
+    <div class="row">
+      <select id="plateSel"></select>
+      <button id="removeBtn" type="button" aria-label="Remove selected plate">Remove</button>
+    </div>
+    <div class="gap">
+      <label for="newPlate">Add a plate</label>
+      <div class="row">
+        <input id="newPlate" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="e.g. ABCD123">
+        <button id="addBtn" type="button">Add</button>
+      </div>
+      <p class="hint" id="addHint">Up to 2 plates.</p>
+    </div>
+    <div class="gap">
+      <label for="days">Number of days</label>
+      <input id="days" type="number" inputmode="numeric" min="1" max="30" value="1">
+    </div>
+    <button class="go" id="goBtn" type="button">Register plate</button>
+    <div id="status" role="status"></div>
+  </div>
+
+  <div class="card">
+    <details id="setup">
+      <summary>GitHub connection</summary>
+      <div class="gap">
+        <label for="repo">Repository</label>
+        <input id="repo" autocomplete="off" autocapitalize="none" placeholder="username/permit-app">
+      </div>
+      <div class="gap">
+        <label for="token">Access token</label>
+        <input id="token" type="password" autocomplete="off" placeholder="github_pat_…">
+        <p class="hint">Fine-grained token for this one repo with Actions: read and write. It is saved only in this browser.</p>
+      </div>
+      <button class="gap" id="saveBtn" type="button">Save connection</button>
+    </details>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v===null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+let plates = store.get('plates', ['DAVF352','GVHB779']);
+let selected = store.get('selected', plates[0]);
+
+function renderPlates(){
+  const sel = $('plateSel');
+  sel.innerHTML = '';
+  plates.forEach(p => { const o = document.createElement('option'); o.value = o.textContent = p; sel.appendChild(o); });
+  if(!plates.includes(selected)) selected = plates[0];
+  sel.value = selected || '';
+  $('plateShow').textContent = selected || '—';
+  $('removeBtn').disabled = !plates.length;
+  $('addBtn').disabled = plates.length >= 2;
+  $('newPlate').disabled = plates.length >= 2;
+  $('addHint').textContent = plates.length >= 2 ? 'Two plates saved. Remove one to add another.' : 'Up to 2 plates.';
+  store.set('plates', plates); store.set('selected', selected);
+  showDays();
+}
+function showDays(){
+  const d = parseInt($('days').value, 10);
+  $('daysShow').textContent = d ? d + (d === 1 ? ' day' : ' days') : '';
+}
+function setStatus(html, cls){ const s = $('status'); s.className = cls || ''; s.innerHTML = html; }
+
+$('plateSel').onchange = e => { selected = e.target.value; renderPlates(); };
+$('days').oninput = showDays;
+$('addBtn').onclick = () => {
+  const v = $('newPlate').value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(v.length < 2) return setStatus('Enter a plate number first.', 'bad');
+  if(plates.includes(v)) return setStatus('That plate is already saved.', 'bad');
+  plates.push(v); selected = v; $('newPlate').value = ''; setStatus('');
+  renderPlates();
+};
+$('removeBtn').onclick = () => { plates = plates.filter(p => p !== selected); selected = plates[0]; renderPlates(); };
+
+$('repo').value = store.get('repo', '');
+$('token').value = store.get('token', '');
+if(!store.get('repo','') || !store.get('token','')) $('setup').open = true;
+$('saveBtn').onclick = () => {
+  store.set('repo', $('repo').value.trim()); store.set('token', $('token').value.trim());
+  setStatus('Connection saved.', 'ok');
+};
+
+const api = (path, opts={}) => fetch('https://api.github.com/repos/' + store.get('repo','') + path, {
+  ...opts,
+  headers: {Accept:'application/vnd.github+json','Authorization':'Bearer ' + store.get('token',''),'X-GitHub-Api-Version':'2022-11-28'}
+});
+
+$('goBtn').onclick = async () => {
+  const days = parseInt($('days').value, 10);
+  if(!selected) return setStatus('Add and select a plate first.', 'bad');
+  if(!(days >= 1 && days <= 30)) return setStatus('Days must be between 1 and 30.', 'bad');
+  if(!store.get('repo','') || !store.get('token','')){ $('setup').open = true; return setStatus('Save your GitHub connection first.', 'bad'); }
+  if(!confirm('Register ' + selected + ' for ' + days + (days===1?' day?':' days?'))) return;
+
+  $('goBtn').disabled = true;
+  setStatus('Sending request…');
+  try{
+    const started = Date.now();
+    const r = await api('/actions/workflows/register.yml/dispatches', {
+      method:'POST',
+      body: JSON.stringify({ref:'main', inputs:{plate:selected, days:String(days)}})
+    });
+    if(r.status !== 204){
+      const msg = r.status === 401 ? 'Token rejected. Check it and save again.'
+        : r.status === 404 ? 'Repository or workflow not found. Check the repository name and token access.'
+        : 'GitHub returned an error (' + r.status + ').';
+      throw new Error(msg);
+    }
+    setStatus('Request sent. Waiting for the run to finish…');
+    await poll(started);
+  }catch(e){
+    setStatus(e.message || 'Could not reach GitHub.', 'bad');
+  }finally{
+    $('goBtn').disabled = false;
+  }
+};
+
+async function poll(started){
+  const repo = store.get('repo','');
+  const runsUrl = 'https://github.com/' + repo + '/actions';
+  for(let i = 0; i < 30; i++){
+    await new Promise(r => setTimeout(r, 4000));
+    try{
+      const r = await api('/actions/workflows/register.yml/runs?event=workflow_dispatch&per_page=1');
+      const run = (await r.json()).workflow_runs?.[0];
+      if(!run || new Date(run.created_at).getTime() < started - 15000) continue;
+      if(run.status === 'completed'){
+        return run.conclusion === 'success'
+          ? setStatus('Done. Permit submitted for ' + selected + '. <a href="' + run.html_url + '">View run</a>', 'ok')
+          : setStatus('The run failed. <a href="' + run.html_url + '">See the log</a>', 'bad');
+      }
+      setStatus('Running (' + run.status.replace('_',' ') + ')…');
+    }catch(e){}
+  }
+  setStatus('Still running. <a href="' + runsUrl + '">Check the Actions tab</a>');
+}
+
+renderPlates();
+</script>
+</body>
+</html>
